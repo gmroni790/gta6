@@ -1,41 +1,54 @@
-// A working gta6-01 entry (Node 22, standard library only): the game is this directory's
-// game/ folder, plain static files a desktop browser loads offline (game/index.html and its ES
-// modules, no library and no network request), and the program hands it in. It copies game/ and
-// screenshots/ from beside this file to /output and writes /output/dossier.json, the summary the
-// judge reads, with the vendored make.fun library. Only the plumbing, not an open world: Block
-// Dodger, a plain 2D canvas game where a paddle dodges falling blocks and catches coins, with a
-// title screen, score, lives and levels, game over and restart, flat colours and no sound. Build
-// your own open-world crime game in its place (three.js or any library you vendor under game/),
-// put your 3 or 4 PNG or JPEG screenshots in screenshots/ (the first by name is the cover) and run it.
-//
-// Serve it locally with `node serve.ts`, then open http://localhost:8080.
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// Sunset Bay — the handoff program for the gta6-01 entry.
+// Solmar City itself is game/: index.html and the modules it loads, plus the
+// three.js library vendored beside them. This program does not run the game;
+// it hands it in. It copies game/ and screenshots/ from the directory this
+// file sits in into the output directory, then writes dossier.json there —
+// the summary the judge reads — with make.fun's vendored library.
+// Where the handoff lands:
+// The output directory is $MAKEFUN_OUTPUT_DIR, defaulting to /output, the
+// path the grader's container provides. Nothing here touches the network,
+// the clock, or any randomness: the same repo always hands in the same bytes.
+// Run it with e.g. MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { buildDossier } from './vendor/makefun-game.ts';
+import * as fs from 'node:fs';
+import { join as joinPath } from 'node:path';
+import { fileURLToPath as urlToPath } from 'node:url';
+import { buildDossier as buildGameDossier } from './vendor/makefun-game.ts';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+// The scorer's caps, taken from the bounty's gate. The text cap shapes the
+// dossier's bytes; the others make this program refuse an entry the scorer
+// would refuse — too many screenshots, one too large, too many game files,
+// too many game bytes, or a game path too long.
+const dossierCaps = {
+  text_max_bytes: 163840,
+  screenshots: { max: 4, max_bytes: 262144 },
+  game_max_files: 993,
+  game_max_bytes: 50331648,
+  game_path_max_bytes: 1000,
+};
 
-mkdirSync(out, { recursive: true });
-cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+// The folder this file sits in, and the folder the handoff goes to.
+const repoDir = urlToPath(new URL('.', import.meta.url));
+const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
-// scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
-// files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json).
-writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, {
-    text_max_bytes: 163840,
-    screenshots: { max: 4, max_bytes: 262144 },
-    game_max_files: 993,
-    game_max_bytes: 50331648,
-    game_path_max_bytes: 1000,
-  }),
-);
+function handIn(): void {
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  // The game itself, required: copy it whole, failing loudly when absent.
+  fs.cpSync(joinPath(repoDir, 'game'), joinPath(outputDir, 'game'), { recursive: true });
+
+  // The screenshots, when the folder is there (the dossier still demands at
+  // least one image, so a missing folder fails at the dossier step).
+  const shotsTarget = joinPath(outputDir, 'screenshots');
+  fs.mkdirSync(shotsTarget, { recursive: true });
+  const shotsSource = joinPath(repoDir, 'screenshots');
+  if (fs.existsSync(shotsSource)) {
+    fs.cpSync(shotsSource, shotsTarget, { recursive: true });
+  }
+
+  // The summary, built from what was just copied, not from the repo.
+  const dossier = buildGameDossier(outputDir, dossierCaps);
+  fs.writeFileSync(joinPath(outputDir, 'dossier.json'), dossier);
+}
+
+handIn();
