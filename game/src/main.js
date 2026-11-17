@@ -203,14 +203,17 @@ function runGame() {
     if (state === 'play') {
       accumulator += frameDt;
       let guard = 0;
-      while (accumulator >= STEP && guard < 5) {
+      // Up to 15 steps (0.25 s, the MAX_FRAME clamp): the game keeps real
+      // time down to ~4 FPS instead of running in slow motion on slow
+      // machines, and a longer stall is still dropped, not replayed.
+      while (accumulator >= STEP && guard < 15) {
         G.stepInFrame = guard;
         stepWorld(STEP);
         accumulator -= STEP;
         guard += 1;
         stepsRan += 1;
       }
-      if (guard >= 5) accumulator = 0; // a long stall is dropped, not replayed
+      if (guard >= 15) accumulator = 0; // a long stall is dropped, not replayed
     } else if (state === 'title') {
       accumulator = 0;
       G.stepInFrame = 0;

@@ -238,7 +238,7 @@ export function createMissions(G) {
           "Meet me at the Marina viewpoint. Let's see if you can still drive.",
         ],
         steps: [
-          { type: 'goto', target: { x: garage.x, z: garage.z }, radius: 8, text: "Head to Lena's garage" },
+          { type: 'goto', target: { x: garage.x, z: garage.z }, radius: 8, hold: 2, text: "Head to Lena's garage" },
           { type: 'getInCar', text: 'Get in a car' },
           { type: 'driveTo', target: { x: marina.x, z: marina.z }, radius: 12, text: 'Drive to the Marina viewpoint' },
         ],
@@ -320,7 +320,7 @@ export function createMissions(G) {
           "The buyer waits at the Hills villa. Don't keep her waiting.",
         ],
         steps: [
-          { type: 'goto', target: { x: docks.x, z: docks.z }, radius: 12, text: 'Go to the docks' },
+          { type: 'goto', target: { x: docks.x, z: docks.z }, radius: 12, hold: 2, text: 'Go to the docks' },
           { type: 'eliminate', target: { x: docks.x, z: docks.z }, count: 3, radius: 18, text: 'Clear out the dock crew' },
           {
             type: 'pickupAndDeliver',
@@ -1082,7 +1082,19 @@ export function createMissions(G) {
     switch (step.type) {
       case 'goto': {
         if (pos && step.target && dist2D(pos.x, pos.z, step.target.x, step.target.z) <= (step.radius || 8)) {
-          advanceStep();
+          // A step with `hold` needs the player to stand in the marker for
+          // that many seconds: the first step of a mission shares its target
+          // with the giver marker that starts it, so without the hold it
+          // would complete in the same update the mission begins and its
+          // objective text would never be seen.
+          if (step.hold) {
+            rt.stepState.hold = (rt.stepState.hold || 0) + dt;
+            if (rt.stepState.hold >= step.hold) advanceStep();
+          } else {
+            advanceStep();
+          }
+        } else {
+          rt.stepState.hold = 0;
         }
         break;
       }
